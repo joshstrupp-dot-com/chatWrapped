@@ -1,0 +1,16 @@
+/.env
+/archive
+/chat.html
+/chatgpt_usage_app.py
+/conversations.json
+/conversations.txt
+/conversations_user_asst_with_time.csv
+/convo_time_energy.csv
+/energy.ipynb
+/examine_structure.py
+/message_feedback.json
+/model_comparisons.json
+/shared_conversations.json
+/streamlit-1.ipynb
+/time_spent.ipynb
+/user.json

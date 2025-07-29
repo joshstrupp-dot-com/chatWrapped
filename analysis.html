@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ChatGPT Usage Analyzer (Pure Client-Side)</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script>
+      // 1. Load Pyodide and needed packages
+      let analyze; // will hold our Python function
+      let pyodideReady = false;
+      let pyodideInstance; // will hold the pyodide instance
+
+      function showStatus(message, isError = false) {
+        const results = document.getElementById("results");
+        results.innerHTML = `<p style="color: ${
+          isError ? "red" : "blue"
+        }; font-weight: bold;">${message}</p>`;
+        console.log(isError ? "ERROR:" : "STATUS:", message);
+      }
+
+      async function initPyodide() {
+        try {
+          console.log("Initializing Pyodide...");
+          showStatus("🔄 Loading Python environment...");
+
+          pyodideInstance = await loadPyodide();
+          console.log("Pyodide loaded, loading pandas...");
+          showStatus("📦 Loading data processing packages...");
+
+          await pyodideInstance.loadPackage("pandas");
+          console.log("Pandas loaded, defining analyzer function...");
+
+          // 2. Define the analyzer in Python
+          await pyodideInstance.runPythonAsync(`
+import io, zipfile, json
+import pandas as pd
+
+def analyze_zip(data_bytes):
+    print(f"Processing zip file of size: {len(data_bytes)} bytes")
+    
+    # unzip & parse
+    try:
+        z = zipfile.ZipFile(io.BytesIO(data_bytes))
+        print(f"Zip file opened successfully. Files: {z.namelist()}")
+        
+        if "conversations.json" not in z.namelist():
+            raise Exception("conversations.json not found in zip file")
+            
+        raw_json = z.read("conversations.json")
+        print(f"conversations.json size: {len(raw_json)} bytes")
+        
+        raw = json.loads(raw_json)
+        print(f"Parsed JSON with {len(raw)} conversations")
+        
+    except Exception as e:
+        print(f"Error processing zip: {str(e)}")
+        raise e
+    
+    msgs = []
+    for i, conv in enumerate(raw):
+        mapping = conv.get("mapping", {})
+        for m in mapping.values():
+            msg = m.get("message")
+            if not msg: continue
+            parts = msg.get("content",{}).get("parts",[])
+            text = "\\n".join(str(p) for p in parts if p)
+            msgs.append({
+                "role": msg["author"].get("role","unknown"),
+                "chars": len(text),
+                "words": len(text.split())
+            })
+    
+    print(f"Extracted {len(msgs)} messages")
+    
+    if not msgs:
+        raise Exception("No messages found in the conversations")
+    
+    df = pd.DataFrame(msgs)
+    user = df[df.role=="user"]
+    asst = df[df.role=="assistant"]
+    
+    print(f"User messages: {len(user)}, Assistant messages: {len(asst)}")
+
+    return {
+        "total_user_msgs":        int(len(user)),
+        "total_user_chars":       int(user.chars.sum()),
+        "hours_typing":           float(user.chars.sum()/200/60),
+        "total_asst_msgs":        int(len(asst)),
+        "total_asst_chars":       int(asst.chars.sum()),
+        "hours_reading":          float(asst.words.sum()/237.5/60),
+        "total_energy_kWh":       float(df.chars.sum()*0.000010)
+    }
+`);
+          analyze = pyodideInstance.globals.get("analyze_zip");
+          pyodideReady = true;
+          console.log("Analyzer ready!");
+          showStatus("✅ Ready! Please select your ChatGPT export zip file.");
+        } catch (error) {
+          console.error("Failed to initialize Pyodide:", error);
+          showStatus(`❌ Failed to initialize: ${error.message}`, true);
+        }
+      }
+
+      // 3. Wire up file-input once Pyodide is ready
+      window.addEventListener("DOMContentLoaded", async () => {
+        await initPyodide();
+
+        document
+          .getElementById("zip-input")
+          .addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+              console.log("No file selected");
+              return;
+            }
+
+            console.log(`File selected: ${file.name} (${file.size} bytes)`);
+
+            if (!pyodideReady) {
+              showStatus(
+                "❌ Python environment not ready yet. Please wait.",
+                true
+              );
+              return;
+            }
+
+            try {
+              showStatus("🔄 Processing your ChatGPT export...");
+
+              console.log("Reading file data...");
+              const arrayBuffer = await file.arrayBuffer();
+              const data = new Uint8Array(arrayBuffer);
+              console.log(`File data loaded: ${data.length} bytes`);
+
+              console.log("Converting data for Python...");
+              // Convert JavaScript Uint8Array to Python bytes
+              const pythonBytes = pyodideInstance.toPy(data);
+
+              console.log("Running analysis...");
+              const pythonResult = analyze(pythonBytes);
+              const res = pythonResult.toJs({
+                dict_converter: Object.fromEntries,
+              });
+              console.log("Analysis complete:", res);
+
+              // 4. Render results
+              document.getElementById("results").innerHTML = `
+              <h2>📊 Analysis Complete!</h2>
+              <ul>
+                <li><strong>User messages:</strong> ${res.total_user_msgs.toLocaleString()}</li>
+                <li><strong>Total characters typed (user):</strong> ${res.total_user_chars.toLocaleString()}</li>
+                <li><strong>Estimated typing time:</strong> ${res.hours_typing.toFixed(
+                  2
+                )} hours</li>
+                <li><strong>Assistant messages:</strong> ${res.total_asst_msgs.toLocaleString()}</li>
+                <li><strong>Total characters (assistant):</strong> ${res.total_asst_chars.toLocaleString()}</li>
+                <li><strong>Estimated reading time:</strong> ${res.hours_reading.toFixed(
+                  2
+                )} hours</li>
+                <li><strong>Total energy consumption:</strong> ${res.total_energy_kWh.toFixed(
+                  4
+                )} kWh</li>
+              </ul>
+            `;
+            } catch (error) {
+              console.error("Analysis failed:", error);
+              showStatus(`❌ Analysis failed: ${error.message}`, true);
+            }
+          });
+      });
+    </script>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2rem;
+        max-width: 800px;
+      }
+      h1 {
+        margin-bottom: 0.5rem;
+      }
+      ul {
+        line-height: 1.6;
+      }
+      input[type="file"] {
+        margin: 1rem 0;
+        padding: 0.5rem;
+        border: 2px dashed #ccc;
+        border-radius: 4px;
+        background: #f9f9f9;
+      }
+      #results {
+        margin-top: 2rem;
+        padding: 1rem;
+        border-radius: 4px;
+        background: #f5f5f5;
+        min-height: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ChatGPT Usage Analyzer</h1>
+    <p>
+      Upload your ChatGPT export (<code>conversations.json</code> inside a
+      <code>.zip</code>) and see:
+    </p>
+    <ul>
+      <li>Messages &amp; character counts</li>
+      <li>Estimated typing &amp; reading time</li>
+      <li>Energy consumed</li>
+    </ul>
+    <input type="file" id="zip-input" accept=".zip" />
+    <div id="results">🔄 Initializing...</div>
+  </body>
+</html>
