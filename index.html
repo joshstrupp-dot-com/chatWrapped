@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>ChatGPT Usage Analyzer (Pure Client-Side)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat Wrapped - Time and energy spent on ChatGPT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
     <script>
       // 1. Load Pyodide and needed packages
@@ -12,9 +19,9 @@
 
       function showStatus(message, isError = false) {
         const results = document.getElementById("results");
-        results.innerHTML = `<p style="color: ${
-          isError ? "red" : "blue"
-        }; font-weight: bold;">${message}</p>`;
+        results.innerHTML = `<div class="status-message ${
+          isError ? "error-message" : ""
+        }">${message}</div>`;
         console.log(isError ? "ERROR:" : "STATUS:", message);
       }
 
@@ -34,67 +41,124 @@
           await pyodideInstance.runPythonAsync(`
 import io, zipfile, json
 import pandas as pd
+from datetime import datetime
 
 def analyze_zip(data_bytes):
+    # Let Python know we're starting to process the zip file and how big it is
     print(f"Processing zip file of size: {len(data_bytes)} bytes")
-    
-    # unzip & parse
+
+    # Try to open the zip file and get the conversations out of it
     try:
+        # Turn the bytes into a zip file we can read
         z = zipfile.ZipFile(io.BytesIO(data_bytes))
         print(f"Zip file opened successfully. Files: {z.namelist()}")
-        
+
+        # Make sure the file we need is in there
         if "conversations.json" not in z.namelist():
             raise Exception("conversations.json not found in zip file")
-            
+
+        # Get the conversation data and turn it from bytes into text
         raw_json = z.read("conversations.json")
         print(f"conversations.json size: {len(raw_json)} bytes")
-        
+
+        # Turn the text into a Python object we can work with
         raw = json.loads(raw_json)
         print(f"Parsed JSON with {len(raw)} conversations")
-        
+
     except Exception as e:
+        # If anything goes wrong, let us know what happened
         print(f"Error processing zip: {str(e)}")
         raise e
-    
+
+    # This will hold all the messages we find
     msgs = []
+
+    # Look through each conversation
     for i, conv in enumerate(raw):
+        # Each conversation has a "mapping" of messages
         mapping = conv.get("mapping", {})
         for m in mapping.values():
             msg = m.get("message")
             if not msg: continue
+            # Get the actual text content from the message
             parts = msg.get("content",{}).get("parts",[])
             text = "\\n".join(str(p) for p in parts if p)
+            # Save important info about each message
             msgs.append({
-                "role": msg["author"].get("role","unknown"),
-                "chars": len(text),
-                "words": len(text.split())
+                "role": msg["author"].get("role","unknown"),  # who wrote it (user or assistant)
+                "chars": len(text),                           # how many characters
+                "words": len(text.split()),                   # how many words
+                "content": text,                              # actual message content
+                "create_time": msg.get("create_time", None)   # message creation timestamp
             })
-    
+
     print(f"Extracted {len(msgs)} messages")
-    
+
+    # Make sure we found some messages
     if not msgs:
         raise Exception("No messages found in the conversations")
-    
+
+    # Turn our list of messages into a table we can analyze
     df = pd.DataFrame(msgs)
+    # Split into user messages and assistant messages
     user = df[df.role=="user"]
     asst = df[df.role=="assistant"]
-    
+
     print(f"User messages: {len(user)}, Assistant messages: {len(asst)}")
 
+    # Find longest and shortest user messages
+    longest_user_msg = ""
+    shortest_user_msg = ""
+    if len(user) > 0:
+        longest_idx = user.chars.idxmax()
+        longest_user_msg = df.loc[longest_idx, 'content']
+
+        # For shortest message, only consider messages with at least 1 character
+        user_with_content = user[user.chars > 0]
+        if len(user_with_content) > 0:
+            shortest_idx = user_with_content.chars.idxmin()
+            shortest_user_msg = df.loc[shortest_idx, 'content']
+        else:
+            # If all user messages are empty, use the first one
+            shortest_user_msg = df.loc[user.index[0], 'content']
+
+    # Calculate energy consumption and comparisons
+    total_energy = float(df.chars.sum()*0.000010)
+    tesla_miles = total_energy * 4.0                         # Tesla drives ~4 miles per kWh
+    microwave_hours = total_energy / 1.2                     # Microwave uses ~1.2 kWh per hour
+    
+    # Get start and end dates and format them
+    start_timestamp = min(msg['create_time'] for msg in msgs if msg['create_time'])
+    end_timestamp = max(msg['create_time'] for msg in msgs if msg['create_time'])
+    
+    # Convert Unix timestamps to readable dates
+    start_date = datetime.fromtimestamp(start_timestamp).strftime("%B %d, %Y")
+    end_date = datetime.fromtimestamp(end_timestamp).strftime("%B %d, %Y")
+    
+    # Return interesting stats about the conversations:
     return {
-        "total_user_msgs":        int(len(user)),
-        "total_user_chars":       int(user.chars.sum()),
-        "hours_typing":           float(user.chars.sum()/200/60),
-        "total_asst_msgs":        int(len(asst)),
-        "total_asst_chars":       int(asst.chars.sum()),
-        "hours_reading":          float(asst.words.sum()/237.5/60),
-        "total_energy_kWh":       float(df.chars.sum()*0.000010)
+        "total_user_msgs":        int(len(user)),            # how many messages the user sent
+        "total_user_chars":       int(user.chars.sum()),     # total characters typed by user
+        "hours_typing":           float(user.chars.sum()/200/60),  # estimate time spent typing (200 chars/min)
+        "total_asst_msgs":        int(len(asst)),            # how many messages from assistant
+        "total_asst_chars":       int(asst.chars.sum()),     # total characters from assistant
+        "hours_reading":          float(asst.words.sum()/237.5/60),  # estimate time spent reading (237.5 words/min)
+        "total_energy_kWh":       total_energy,              # rough estimate of energy used
+        "tesla_miles":            float(tesla_miles),        # equivalent miles a Tesla could drive
+        "microwave_hours":        float(microwave_hours),    # equivalent hours running a microwave
+        "longest_user_msg":       str(longest_user_msg),     # content of longest user message
+        "shortest_user_msg":      str(shortest_user_msg),    # content of shortest user message
+        "start_date":             start_date,                # earliest message date (formatted)
+        "end_date":               end_date                   # latest message date (formatted)
     }
 `);
           analyze = pyodideInstance.globals.get("analyze_zip");
           pyodideReady = true;
           console.log("Analyzer ready!");
           showStatus("✅ Ready! Please select your ChatGPT export zip file.");
+
+          // Enable the file input only once Pyodide is ready
+          document.getElementById("zip-input").disabled = false;
         } catch (error) {
           console.error("Failed to initialize Pyodide:", error);
           showStatus(`❌ Failed to initialize: ${error.message}`, true);
@@ -103,6 +167,9 @@ def analyze_zip(data_bytes):
 
       // 3. Wire up file-input once Pyodide is ready
       window.addEventListener("DOMContentLoaded", async () => {
+        // Disable file input initially
+        document.getElementById("zip-input").disabled = true;
+
         await initPyodide();
 
         document
@@ -143,25 +210,107 @@ def analyze_zip(data_bytes):
               });
               console.log("Analysis complete:", res);
 
-              // 4. Render results
+              // Helper function to truncate long messages for display
+              function truncateMessage(msg, maxLength = 200) {
+                if (msg.length <= maxLength) return msg;
+                return msg.substring(0, maxLength) + "...";
+              }
+
+              // 4. Render results in Chat Wrapped style
               document.getElementById("results").innerHTML = `
-              <h2>📊 Analysis Complete!</h2>
-              <ul>
-                <li><strong>User messages:</strong> ${res.total_user_msgs.toLocaleString()}</li>
-                <li><strong>Total characters typed (user):</strong> ${res.total_user_chars.toLocaleString()}</li>
-                <li><strong>Estimated typing time:</strong> ${res.hours_typing.toFixed(
-                  2
-                )} hours</li>
-                <li><strong>Assistant messages:</strong> ${res.total_asst_msgs.toLocaleString()}</li>
-                <li><strong>Total characters (assistant):</strong> ${res.total_asst_chars.toLocaleString()}</li>
-                <li><strong>Estimated reading time:</strong> ${res.hours_reading.toFixed(
-                  2
-                )} hours</li>
-                <li><strong>Total energy consumption:</strong> ${res.total_energy_kWh.toFixed(
-                  4
-                )} kWh</li>
-              </ul>
-            `;
+                <div class="results-container">
+                  <!-- Divider -->
+                  <div class="divider">*******************************************************</div>
+                  
+                  <!-- Date Range Section -->
+                  <div class="date-section">
+                    <div class="date-label">FROM</div>
+                    <div class="date-value">${res.start_date}</div>
+                    <div class="date-label">TO</div>
+                    <div class="date-value">${res.end_date}</div>
+                  </div>
+
+                  <!-- Divider -->
+                  <div class="divider">*******************************************************</div>
+
+                  <!-- Time spent writing -->
+                  <div class="metric-section">
+                    <div class="metric-label">Time spent writing</div>
+                    <div class="metric-value">${Math.round(
+                      res.hours_typing
+                    )} hours</div>
+                    <div class="metric-description">
+                      Messages you sent, estimated based on the American typing rate average of 200 characters per minute.
+                    </div>
+                  </div>
+
+                  <!-- Time spent reading -->
+                  <div class="metric-section">
+                    <div class="metric-label">Time spent reading</div>
+                    <div class="metric-value">${Math.round(
+                      res.hours_reading
+                    )} hours</div>
+                    <div class="metric-description">
+                      Messages sent by ChatGPT, estimated based on the American reading rate average of 237.5 characters per minute.
+                    </div>
+                  </div>
+
+                  <!-- Energy used -->
+                  <div class="metric-section">
+                    <div class="metric-label">Energy used</div>
+                    <div class="metric-value">${Math.round(
+                      res.total_energy_kWh
+                    )} kWh</div>
+                    <div class="metric-description">
+                      kWh, or kilowatt hours, is an estimate of energy used. We use a rate of 0.000010 kWh per character, based on reported LLM energy averages.
+                      <br><br>
+                      Your usage is equivalent to driving <span class="highlight">${Math.round(
+                        res.tesla_miles
+                      )} miles</span> in a Tesla or running a microwave for <span class="highlight">${Math.round(
+                res.microwave_hours * 60
+              )} minutes</span>.
+                    </div>
+                  </div>
+
+                  <!-- Longest message -->
+                  <div class="metric-section">
+                    <div class="metric-label">Longest message</div>
+                    <div class="message-content">
+                      ${
+                        res.longest_user_msg.length > 200
+                          ? res.longest_user_msg
+                              .substring(0, 200)
+                              .replace(/</g, "&lt;")
+                              .replace(/>/g, "&gt;") + "..."
+                          : res.longest_user_msg
+                              .replace(/</g, "&lt;")
+                              .replace(/>/g, "&gt;")
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Shortest message -->
+                  <div class="metric-section">
+                    <div class="metric-label">Shortest message</div>
+                    <div class="message-content">
+                      ${res.shortest_user_msg
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")}
+                    </div>
+                  </div>
+
+                  <!-- Final divider -->
+                  <div class="divider">*******************************************************</div>
+
+                  <!-- See the code section -->
+                  <div class="code-section">
+                    <div class="blue-button">See the code</div>
+                    <div class="metric-description">
+                      <a href="https://github.com/joshstrupp-dot-com/chatWrapped" target="_blank" class="code-link">Check out how it works</a>! This was largely (and somewhat ironically) an AI-assisted project, so please do call out errors you find.
+                    </div>
+                  </div>
+                </div>
+              `;
             } catch (error) {
               console.error("Analysis failed:", error);
               showStatus(`❌ Analysis failed: ${error.message}`, true);
@@ -170,45 +319,349 @@ def analyze_zip(data_bytes):
       });
     </script>
     <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: sans-serif;
-        margin: 2rem;
-        max-width: 800px;
+        font-family: "Ubuntu Mono", monospace;
+        background-color: #ffffff;
+        color: #000000;
+        line-height: 1.4;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
       }
-      h1 {
-        margin-bottom: 0.5rem;
+
+      .container {
+        max-width: 671px;
+        margin: 0 auto;
+        padding: 121px 20px 40px 20px;
+        position: relative;
       }
-      ul {
-        line-height: 1.6;
+
+      /* Header */
+      .header {
+        text-align: center;
+        margin-bottom: 60px;
       }
+
+      .title {
+        font-size: 32px;
+        font-weight: 400;
+        margin-bottom: 10px;
+        text-align: left;
+        margin-left: 0;
+      }
+
+      .subtitle {
+        font-size: 22px;
+        font-weight: 400;
+        text-align: right;
+        margin-bottom: 40px;
+      }
+
+      .divider {
+        font-size: 22px;
+        font-weight: 400;
+        text-align: center;
+        margin: 40px 0;
+        color: #000000;
+      }
+
+      /* FAQ Sections */
+      .faq-section {
+        margin-bottom: 45px;
+      }
+
+      .blue-button {
+        background-color: #154bff;
+        color: #ffffff;
+        padding: 10px;
+        text-align: center;
+        font-size: 22px;
+        font-weight: 400;
+        margin-bottom: 25px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .blue-button:hover {
+        background-color: #0d3dd6;
+      }
+
+      .faq-content {
+        font-size: 22px;
+        font-weight: 400;
+        line-height: 1.23;
+        margin-bottom: 18px;
+      }
+
+      /* Upload Section */
+      .upload-section {
+        text-align: center;
+        margin: 60px 0;
+        position: relative;
+      }
+
+      .upload-button {
+        background-color: #ffffff;
+        border: 8px solid #154bff;
+        color: #154bff;
+        padding: 10px 20px;
+        font-size: 32px;
+        font-weight: 700;
+        text-decoration: underline;
+        text-transform: uppercase;
+        cursor: pointer;
+        box-shadow: -20px 20px 4px 0px rgba(0, 0, 0, 0.25);
+        margin: 20px 0;
+        display: inline-block;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .upload-button:hover {
+        transform: translate(-2px, 2px);
+        box-shadow: -18px 18px 4px 0px rgba(0, 0, 0, 0.25);
+      }
+
       input[type="file"] {
-        margin: 1rem 0;
-        padding: 0.5rem;
-        border: 2px dashed #ccc;
-        border-radius: 4px;
-        background: #f9f9f9;
+        position: absolute;
+        opacity: 0;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        z-index: 1;
       }
-      #results {
-        margin-top: 2rem;
-        padding: 1rem;
+
+      .video-placeholder {
+        background-color: #d9d9d9;
+        height: 314px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        color: #000000;
+        text-align: center;
+        margin: 40px 0;
+      }
+
+      /* Results Section */
+      .results-container {
+        margin-top: 40px;
+      }
+
+      .date-section {
+        text-align: center;
+        margin: 40px 0;
+      }
+
+      .date-label {
+        font-size: 22px;
+        color: #154bff;
+        font-weight: 400;
+        margin: 10px 0;
+      }
+
+      .date-value {
+        font-size: 32px;
+        color: #154bff;
+        font-weight: 700;
+        margin: 10px 0;
+      }
+
+      .metric-section {
+        text-align: center;
+        margin: 60px 0;
+      }
+
+      .metric-label {
+        font-size: 22px;
+        color: #154bff;
+        font-weight: 400;
+        margin-bottom: 13px;
+      }
+
+      .metric-value {
+        font-size: 82px;
+        color: #154bff;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 13px;
+      }
+
+      .metric-description {
+        font-size: 22px;
+        color: #000000;
+        font-weight: 400;
+        line-height: 1.23;
+        text-align: center;
+      }
+
+      .highlight {
+        color: #154bff;
+        font-weight: 700;
+      }
+
+      .message-content {
+        font-size: 22px;
+        color: #000000;
+        font-weight: 400;
+        line-height: 1.23;
+        text-align: center;
+        margin: 20px 0;
+        padding: 20px;
+        background-color: #f9f9f9;
         border-radius: 4px;
-        background: #f5f5f5;
-        min-height: 2rem;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .code-section {
+        text-align: center;
+        margin: 60px 0;
+      }
+
+      .code-link {
+        color: #000000;
+        text-decoration: underline;
+      }
+
+      .code-link:hover {
+        color: #154bff;
+      }
+
+      /* Status messages */
+      #results {
+        min-height: auto;
+        background: transparent;
+        padding: 0;
+        margin: 0;
+      }
+
+      .status-message {
+        text-align: center;
+        font-size: 22px;
+        color: #154bff;
+        font-weight: 700;
+        margin: 40px 0;
+      }
+
+      .error-message {
+        color: #ff1544 !important;
+      }
+
+      /* Responsive Design */
+      @media (max-width: 768px) {
+        .container {
+          padding: 60px 15px 20px 15px;
+        }
+
+        .title {
+          font-size: 28px;
+        }
+
+        .subtitle {
+          font-size: 18px;
+        }
+
+        .metric-value {
+          font-size: 64px;
+        }
+
+        .upload-button {
+          font-size: 24px;
+          padding: 8px 16px;
+        }
+
+        .divider {
+          font-size: 18px;
+          word-break: break-all;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .metric-value {
+          font-size: 48px;
+        }
+
+        .faq-content,
+        .metric-description {
+          font-size: 18px;
+        }
+
+        .upload-button {
+          font-size: 20px;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>ChatGPT Usage Analyzer</h1>
-    <p>
-      Upload your ChatGPT export (<code>conversations.json</code> inside a
-      <code>.zip</code>) and see:
-    </p>
-    <ul>
-      <li>Messages &amp; character counts</li>
-      <li>Estimated typing &amp; reading time</li>
-      <li>Energy consumed</li>
-    </ul>
-    <input type="file" id="zip-input" accept=".zip" />
-    <div id="results">🔄 Initializing...</div>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <div class="title">Chat Wrapped</div>
+        <div class="subtitle">Time and energy spent on ChatGPT</div>
+      </div>
+
+      <div class="divider">
+        *******************************************************
+      </div>
+
+      <!-- What is this? -->
+      <div class="faq-section">
+        <div class="blue-button">What is this?</div>
+        <div class="faq-content">
+          It's simple really. You talk to ChatGPT. Maybe a lot, maybe a little.
+          It's hard to gauge, isn't it?
+          <br /><br />
+          With your conversation export, we can gauge it. Or, we can get close.
+          Here, you can estimate time spend writing to your new robot pal, how
+          much time you spend reading its response, and roughly how much energy
+          it all takes.
+        </div>
+      </div>
+
+      <!-- How do I start? -->
+      <div class="faq-section">
+        <div class="blue-button">How do I start?</div>
+        <div class="faq-content">
+          Export your ChatGPT data, wait for daddy Sam to email you a .zip, and
+          upload it here.
+        </div>
+      </div>
+
+      <!-- Video placeholder -->
+      <div class="video-placeholder">
+        Video grab of data export will be added here
+      </div>
+
+      <!-- Wtf is this secure? -->
+      <div class="faq-section">
+        <div class="blue-button">Wtf is this secure?</div>
+        <div class="faq-content">
+          Sure is. It runs using Pyodide. In short, it runs an app on your
+          browser, so your data isn't shared to anyone. It lives on your
+          computer and in your cache.
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="upload-section">
+        <div class="upload-button">
+          Upload your .zip
+          <input type="file" id="zip-input" accept=".zip" />
+        </div>
+      </div>
+
+      <!-- Results Section -->
+      <div id="results" class="status-message">🔄 Initializing...</div>
+    </div>
   </body>
 </html>
