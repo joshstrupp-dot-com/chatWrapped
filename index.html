@@ -271,21 +271,13 @@ def analyze_zip(data_bytes):
               )} minutes</span>.
                     </div>
                   </div>
-
                   <!-- Longest message -->
                   <div class="metric-section">
                     <div class="metric-label">Longest message</div>
-                    <div class="message-content">
-                      ${
-                        res.longest_user_msg.length > 200
-                          ? res.longest_user_msg
-                              .substring(0, 200)
-                              .replace(/</g, "&lt;")
-                              .replace(/>/g, "&gt;") + "..."
-                          : res.longest_user_msg
-                              .replace(/</g, "&lt;")
-                              .replace(/>/g, "&gt;")
-                      }
+                    <div class="message-content" style="max-height: 200px; overflow-y: auto;">
+                      ${res.longest_user_msg
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")}
                     </div>
                   </div>
 
@@ -302,6 +294,16 @@ def analyze_zip(data_bytes):
                   <!-- Final divider -->
                   <div class="divider">*******************************************************</div>
 
+                  <!-- Share section -->
+                  <div class="share-section">
+                    <div class="share-button" onclick="shareResults(${JSON.stringify(
+                      res
+                    ).replace(/"/g, "&quot;")})">Share your results</div>
+                    <div class="metric-description">
+                      Copy a shareable message with your Chat Wrapped stats
+                    </div>
+                  </div>
+
                   <!-- See the code section -->
                   <div class="code-section">
                     <div class="blue-button">See the code</div>
@@ -317,6 +319,68 @@ def analyze_zip(data_bytes):
             }
           });
       });
+
+      // Share functionality
+      function shareResults(results) {
+        const shareText = `🤖 My Chat Wrapped Results 🤖
+
+📅 From ${results.start_date} to ${results.end_date}
+
+✍️ Time spent writing: ${Math.round(results.hours_typing)} hours
+📖 Time spent reading: ${Math.round(results.hours_reading)} hours
+⚡ Energy used: ${Math.round(results.total_energy_kWh)} kWh
+🚗 Equivalent to driving ${Math.round(results.tesla_miles)} miles in a Tesla
+
+Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
+
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard
+            .writeText(shareText)
+            .then(() => {
+              showShareFeedback("✅ Copied to clipboard!");
+            })
+            .catch(() => {
+              fallbackCopyToClipboard(shareText);
+            });
+        } else {
+          fallbackCopyToClipboard(shareText);
+        }
+      }
+
+      function fallbackCopyToClipboard(text) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+          document.execCommand("copy");
+          showShareFeedback("✅ Copied to clipboard!");
+        } catch (err) {
+          showShareFeedback("❌ Copy failed. Please copy manually.");
+          console.error("Fallback copy failed:", err);
+        }
+
+        document.body.removeChild(textArea);
+      }
+
+      function showShareFeedback(message) {
+        const shareButton = document.querySelector(".share-button");
+        const originalText = shareButton.textContent;
+        shareButton.textContent = message;
+        shareButton.style.backgroundColor = message.includes("✅")
+          ? "#28a745"
+          : "#dc3545";
+
+        setTimeout(() => {
+          shareButton.textContent = originalText;
+          shareButton.style.backgroundColor = "#154bff";
+        }, 2000);
+      }
     </script>
     <style>
       * {
@@ -340,6 +404,7 @@ def analyze_zip(data_bytes):
         margin: 0 auto;
         padding: 121px 20px 40px 20px;
         position: relative;
+        background-color: #efefef;
       }
 
       /* Header */
@@ -384,19 +449,14 @@ def analyze_zip(data_bytes):
         font-size: 22px;
         font-weight: 400;
         margin-bottom: 25px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
-
-      .blue-button:hover {
-        background-color: #0d3dd6;
       }
 
       .faq-content {
         font-size: 22px;
         font-weight: 400;
         line-height: 1.23;
-        margin-bottom: 18px;
+        margin-bottom: 120px;
+        margin-top: 20px;
       }
 
       /* Upload Section */
@@ -439,17 +499,17 @@ def analyze_zip(data_bytes):
         z-index: 1;
       }
 
-      .video-placeholder {
-        background-color: #d9d9d9;
-        height: 314px;
+      .video-container {
         width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        color: #000000;
-        text-align: center;
         margin: 40px 0;
+        text-align: center;
+      }
+
+      .video-container video {
+        width: 100%;
+        height: 314px;
+        object-fit: cover;
+        border-radius: 4px;
       }
 
       /* Results Section */
@@ -521,6 +581,34 @@ def analyze_zip(data_bytes):
         border-radius: 4px;
         max-height: 200px;
         overflow-y: auto;
+      }
+
+      .share-section {
+        text-align: center;
+        margin: 60px 0;
+      }
+
+      .share-button {
+        background-color: #154bff;
+        color: #ffffff;
+        padding: 15px 30px;
+        font-size: 22px;
+        font-weight: 700;
+        cursor: pointer;
+        border-radius: 4px;
+        display: inline-block;
+        margin-bottom: 15px;
+        transition: background-color 0.2s, transform 0.1s;
+        user-select: none;
+      }
+
+      .share-button:hover {
+        background-color: #0d3dd6;
+        transform: translateY(-1px);
+      }
+
+      .share-button:active {
+        transform: translateY(0);
       }
 
       .code-section {
@@ -634,12 +722,15 @@ def analyze_zip(data_bytes):
         <div class="faq-content">
           Export your ChatGPT data, wait for daddy Sam to email you a .zip, and
           upload it here.
-        </div>
-      </div>
 
-      <!-- Video placeholder -->
-      <div class="video-placeholder">
-        Video grab of data export will be added here
+          <!-- Video -->
+          <div class="video-container">
+            <video controls width="100%" height="314">
+              <source src="export-demo.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
       </div>
 
       <!-- Wtf is this secure? -->
