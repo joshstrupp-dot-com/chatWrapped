@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
@@ -157,8 +157,9 @@ def analyze_zip(data_bytes):
           console.log("Analyzer ready!");
           showStatus("✅ Ready! Please select your ChatGPT export zip file.");
 
-          // Enable the file input only once Pyodide is ready
+          // Enable the file input and upload button only once Pyodide is ready
           document.getElementById("zip-input").disabled = false;
+          document.getElementById("upload-button").classList.remove("disabled");
         } catch (error) {
           console.error("Failed to initialize Pyodide:", error);
           showStatus(`❌ Failed to initialize: ${error.message}`, true);
@@ -220,7 +221,7 @@ def analyze_zip(data_bytes):
               document.getElementById("results").innerHTML = `
                 <div class="results-container">
                   <!-- Divider -->
-                  <div class="divider">*******************************************************</div>
+                  <div class="divider">================================</div>
                   
                   <!-- Date Range Section -->
                   <div class="date-section">
@@ -231,25 +232,23 @@ def analyze_zip(data_bytes):
                   </div>
 
                   <!-- Divider -->
-                  <div class="divider">*******************************************************</div>
+                  <div class="divider">================================</div>
 
                   <!-- Time spent writing -->
                   <div class="metric-section">
-                    <div class="metric-label">Time spent writing</div>
-                    <div class="metric-value">${Math.round(
-                      res.hours_typing
-                    )} hours</div>
+                    <div class="metric-label">Time spent writing <span class="metric-value">${Math.round(
+                      res.hours_typing / 2
+                    )} hrs</span></div>
                     <div class="metric-description">
-                      Messages you sent, estimated based on the American typing rate average of 200 characters per minute.
+                      Messages you sent, estimated based on the American typing rate average of 200 characters per minute. Divides the number by two assuming that roughly half of what you send is copied and pasted.
                     </div>
                   </div>
 
                   <!-- Time spent reading -->
                   <div class="metric-section">
-                    <div class="metric-label">Time spent reading</div>
-                    <div class="metric-value">${Math.round(
+                    <div class="metric-label">Time spent reading <span class="metric-value">${Math.round(
                       res.hours_reading
-                    )} hours</div>
+                    )} hrs</span></div>
                     <div class="metric-description">
                       Messages sent by ChatGPT, estimated based on the American reading rate average of 237.5 characters per minute.
                     </div>
@@ -257,10 +256,9 @@ def analyze_zip(data_bytes):
 
                   <!-- Energy used -->
                   <div class="metric-section">
-                    <div class="metric-label">Energy used</div>
-                    <div class="metric-value">${Math.round(
+                    <div class="metric-label">Energy used <span class="metric-value">${Math.round(
                       res.total_energy_kWh
-                    )} kWh</div>
+                    )} kWh</span></div>
                     <div class="metric-description">
                       kWh, or kilowatt hours, is an estimate of energy used. We use a rate of 0.000010 kWh per character, based on reported LLM energy averages.
                       <br><br>
@@ -274,7 +272,7 @@ def analyze_zip(data_bytes):
                   <!-- Longest message -->
                   <div class="metric-section">
                     <div class="metric-label">Longest message</div>
-                    <div class="message-content" style="max-height: 200px; overflow-y: auto;">
+                    <div class="message-content">
                       ${res.longest_user_msg
                         .replace(/</g, "&lt;")
                         .replace(/>/g, "&gt;")}
@@ -292,7 +290,7 @@ def analyze_zip(data_bytes):
                   </div>
 
                   <!-- Final divider -->
-                  <div class="divider">*******************************************************</div>
+                  <div class="divider">================================</div>
 
                   <!-- Share section -->
                   <div class="share-section">
@@ -326,7 +324,7 @@ def analyze_zip(data_bytes):
 
 📅 From ${results.start_date} to ${results.end_date}
 
-✍️ Time spent writing: ${Math.round(results.hours_typing)} hours
+✍️ Time spent writing: ${Math.round(results.hours_typing / 2)} hours
 📖 Time spent reading: ${Math.round(results.hours_reading)} hours
 ⚡ Energy used: ${Math.round(results.total_energy_kWh)} kWh
 🚗 Equivalent to driving ${Math.round(results.tesla_miles)} miles in a Tesla
@@ -390,102 +388,142 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       body {
-        font-family: "Ubuntu Mono", monospace;
-        background-color: #ffffff;
+        font-family: "Courier Prime", "Courier New", monospace;
+        background-color: #2c2c2c;
         color: #000000;
-        line-height: 1.4;
+        line-height: 1.3;
         margin: 0;
-        padding: 0;
+        padding: 20px;
         min-height: 100vh;
       }
 
       .container {
-        max-width: 671px;
+        max-width: 400px;
         margin: 0 auto;
-        padding: 121px 20px 40px 20px;
+        padding: 30px 25px;
         position: relative;
-        background-color: #efefef;
+        background-color: #ffffff;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        border-radius: 0;
+        /* Receipt paper texture */
+        background-image: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 24px,
+          rgba(0, 0, 0, 0.03) 25px
+        );
       }
 
       /* Header */
       .header {
         text-align: center;
-        margin-bottom: 60px;
+        margin-bottom: 30px;
+        border-bottom: 2px dashed #000;
+        padding-bottom: 20px;
       }
 
       .title {
-        font-size: 32px;
-        font-weight: 400;
-        margin-bottom: 10px;
-        text-align: left;
-        margin-left: 0;
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 5px;
+        text-align: center;
+        letter-spacing: 2px;
+        text-transform: uppercase;
       }
 
       .subtitle {
-        font-size: 22px;
+        font-size: 12px;
         font-weight: 400;
-        text-align: right;
-        margin-bottom: 40px;
+        text-align: center;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .divider {
-        font-size: 22px;
+        font-size: 14px;
         font-weight: 400;
         text-align: center;
-        margin: 40px 0;
+        margin: 20px 0;
         color: #000000;
+        letter-spacing: 1px;
       }
 
       /* FAQ Sections */
       .faq-section {
-        margin-bottom: 45px;
+        margin-bottom: 25px;
+        border-bottom: 1px dashed #ccc;
+        padding-bottom: 20px;
       }
 
       .blue-button {
-        background-color: #154bff;
+        background-color: #000;
         color: #ffffff;
-        padding: 10px;
+        padding: 8px 12px;
         text-align: center;
-        font-size: 22px;
-        font-weight: 400;
-        margin-bottom: 25px;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 15px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border: none;
       }
 
       .faq-content {
-        font-size: 22px;
+        font-size: 12px;
         font-weight: 400;
-        line-height: 1.23;
-        margin-bottom: 120px;
-        margin-top: 20px;
+        line-height: 1.4;
+        margin-bottom: 20px;
+        margin-top: 10px;
+        text-align: left;
       }
 
       /* Upload Section */
       .upload-section {
         text-align: center;
-        margin: 60px 0;
+        margin: 30px 0;
         position: relative;
+        border-top: 2px dashed #000;
+        border-bottom: 2px dashed #000;
+        padding: 20px 0;
       }
 
       .upload-button {
-        background-color: #ffffff;
-        border: 8px solid #154bff;
-        color: #154bff;
-        padding: 10px 20px;
-        font-size: 32px;
+        background-color: #000;
+        border: 2px solid #000;
+        color: #ffffff;
+        padding: 12px 20px;
+        font-size: 14px;
         font-weight: 700;
-        text-decoration: underline;
+        text-decoration: none;
         text-transform: uppercase;
         cursor: pointer;
-        box-shadow: -20px 20px 4px 0px rgba(0, 0, 0, 0.25);
-        margin: 20px 0;
+        box-shadow: none;
+        margin: 10px 0;
         display: inline-block;
         position: relative;
         overflow: hidden;
+        letter-spacing: 1px;
       }
 
       .upload-button:hover {
-        transform: translate(-2px, 2px);
-        box-shadow: -18px 18px 4px 0px rgba(0, 0, 0, 0.25);
+        transform: none;
+        box-shadow: none;
+        background-color: #333;
+      }
+
+      .upload-button.disabled {
+        background-color: #ccc;
+        border-color: #ccc;
+        color: #666;
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+
+      .upload-button.disabled:hover {
+        transform: none;
+        box-shadow: none;
+        background-color: #ccc;
       }
 
       input[type="file"] {
@@ -501,128 +539,155 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
 
       .video-container {
         width: 100%;
-        margin: 40px 0;
+        margin: 20px 0;
         text-align: center;
+        border: 1px solid #000;
+        padding: 10px;
       }
 
       .video-container video {
         width: 100%;
-        height: 314px;
+        height: 200px;
         object-fit: cover;
-        border-radius: 4px;
+        border-radius: 0;
+        border: 1px solid #ccc;
       }
 
       /* Results Section */
       .results-container {
-        margin-top: 40px;
+        margin-top: 20px;
       }
 
       .date-section {
         text-align: center;
-        margin: 40px 0;
+        margin: 20px 0;
+        border-bottom: 1px dashed #ccc;
+        padding-bottom: 15px;
       }
 
       .date-label {
-        font-size: 22px;
-        color: #154bff;
-        font-weight: 400;
-        margin: 10px 0;
+        font-size: 12px;
+        color: #000;
+        font-weight: 700;
+        margin: 5px 0;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .date-value {
-        font-size: 32px;
-        color: #154bff;
-        font-weight: 700;
-        margin: 10px 0;
+        font-size: 14px;
+        color: #000;
+        font-weight: 400;
+        margin: 5px 0;
       }
 
       .metric-section {
-        text-align: center;
-        margin: 60px 0;
+        text-align: left;
+        margin: 15px 0;
+        border-bottom: 1px dotted #ddd;
+        padding-bottom: 10px;
       }
 
       .metric-label {
-        font-size: 22px;
-        color: #154bff;
-        font-weight: 400;
-        margin-bottom: 13px;
+        font-size: 12px;
+        color: #000;
+        font-weight: 700;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
       }
 
       .metric-value {
-        font-size: 82px;
-        color: #154bff;
+        font-size: 16px;
+        color: #000;
         font-weight: 700;
         line-height: 1;
-        margin-bottom: 13px;
+        margin-bottom: 8px;
+        text-align: right;
+        float: right;
       }
 
       .metric-description {
-        font-size: 22px;
-        color: #000000;
+        font-size: 10px;
+        color: #666;
         font-weight: 400;
-        line-height: 1.23;
-        text-align: center;
+        line-height: 1.3;
+        text-align: left;
+        clear: both;
+        margin-top: 5px;
       }
 
       .highlight {
-        color: #154bff;
+        color: #000;
         font-weight: 700;
       }
 
       .message-content {
-        font-size: 22px;
+        font-size: 10px;
         color: #000000;
         font-weight: 400;
-        line-height: 1.23;
-        text-align: center;
-        margin: 20px 0;
-        padding: 20px;
+        line-height: 1.3;
+        text-align: left;
+        margin: 10px 0;
+        padding: 10px;
         background-color: #f9f9f9;
-        border-radius: 4px;
-        max-height: 200px;
+        border: 1px solid #ddd;
+        border-radius: 0;
+        max-height: 150px;
         overflow-y: auto;
+        font-family: "Courier Prime", "Courier New", monospace;
       }
 
       .share-section {
         text-align: center;
-        margin: 60px 0;
+        margin: 30px 0;
+        border-top: 2px dashed #000;
+        padding-top: 20px;
       }
 
       .share-button {
-        background-color: #154bff;
+        background-color: #000;
         color: #ffffff;
-        padding: 15px 30px;
-        font-size: 22px;
+        padding: 10px 20px;
+        font-size: 12px;
         font-weight: 700;
         cursor: pointer;
-        border-radius: 4px;
+        border-radius: 0;
         display: inline-block;
-        margin-bottom: 15px;
-        transition: background-color 0.2s, transform 0.1s;
+        margin-bottom: 10px;
+        transition: background-color 0.2s;
         user-select: none;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .share-button:hover {
-        background-color: #0d3dd6;
-        transform: translateY(-1px);
+        background-color: #333;
+        transform: none;
       }
 
       .share-button:active {
-        transform: translateY(0);
+        transform: none;
       }
 
       .code-section {
         text-align: center;
-        margin: 60px 0;
+        margin: 30px 0;
+        border-top: 1px dashed #ccc;
+        padding-top: 15px;
       }
 
       .code-link {
         color: #000000;
         text-decoration: underline;
+        font-size: 10px;
       }
 
       .code-link:hover {
-        color: #154bff;
+        color: #666;
       }
 
       /* Status messages */
@@ -635,57 +700,74 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
 
       .status-message {
         text-align: center;
-        font-size: 22px;
-        color: #154bff;
+        font-size: 12px;
+        color: #000;
         font-weight: 700;
-        margin: 40px 0;
+        margin: 20px 0;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 10px;
+        border: 1px dashed #000;
       }
 
       .error-message {
-        color: #ff1544 !important;
+        color: #000 !important;
+        background-color: #f5f5f5;
+        border-color: #000 !important;
       }
 
       /* Responsive Design */
       @media (max-width: 768px) {
         .container {
-          padding: 60px 15px 20px 15px;
+          padding: 20px 15px;
+          max-width: 350px;
         }
 
         .title {
-          font-size: 28px;
+          font-size: 20px;
         }
 
         .subtitle {
-          font-size: 18px;
+          font-size: 10px;
         }
 
         .metric-value {
-          font-size: 64px;
+          font-size: 14px;
         }
 
         .upload-button {
-          font-size: 24px;
-          padding: 8px 16px;
+          font-size: 12px;
+          padding: 10px 16px;
         }
 
         .divider {
-          font-size: 18px;
+          font-size: 12px;
           word-break: break-all;
+        }
+
+        .video-container video {
+          height: 150px;
         }
       }
 
       @media (max-width: 480px) {
+        .container {
+          max-width: 300px;
+          padding: 15px 10px;
+        }
+
         .metric-value {
-          font-size: 48px;
+          font-size: 12px;
         }
 
         .faq-content,
         .metric-description {
-          font-size: 18px;
+          font-size: 10px;
         }
 
         .upload-button {
-          font-size: 20px;
+          font-size: 10px;
+          padding: 8px 12px;
         }
       }
     </style>
@@ -698,9 +780,7 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
         <div class="subtitle">Time and energy spent on ChatGPT</div>
       </div>
 
-      <div class="divider">
-        *******************************************************
-      </div>
+      <div class="divider">================================</div>
 
       <!-- What is this? -->
       <div class="faq-section">
@@ -745,7 +825,7 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
 
       <!-- Upload Section -->
       <div class="upload-section">
-        <div class="upload-button">
+        <div class="upload-button disabled" id="upload-button">
           Upload your .zip
           <input type="file" id="zip-input" accept=".zip" />
         </div>
