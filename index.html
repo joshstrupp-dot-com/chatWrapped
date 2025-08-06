@@ -239,8 +239,15 @@ def analyze_zip(data_bytes):
                     <div class="metric-label">Time spent writing <span class="metric-value">${Math.round(
                       res.hours_typing / 2
                     )} hrs</span></div>
-                    <div class="metric-description">
+                    <div class="metric-footnote">
                       Messages you sent, estimated based on the American typing rate average of 200 characters per minute. Divides the number by two assuming that roughly half of what you send is copied and pasted.
+                    </div>
+                    <div class="metric-description">
+                      With this amount of time, you could have written <span class="highlight">${Math.round(
+                        (res.hours_typing / 2) * (60 / 7)
+                      )} postcards</span> to your loved ones. Shame on you! Or searched through an encyclopedia for the answer <span class="highlight">${Math.round(
+                (res.hours_typing / 2) * (60 / 9)
+              )} times</span>. What a waste of time! Just use ChatGPT!
                     </div>
                   </div>
 
@@ -249,8 +256,15 @@ def analyze_zip(data_bytes):
                     <div class="metric-label">Time spent reading <span class="metric-value">${Math.round(
                       res.hours_reading
                     )} hrs</span></div>
-                    <div class="metric-description">
+                    <div class="metric-footnote">
                       Messages sent by ChatGPT, estimated based on the American reading rate average of 237.5 characters per minute.
+                    </div>
+                    <div class="metric-description">
+                      With this amount of time, you could have read the Bible <span class="highlight">${(
+                        res.hours_reading / 59
+                      ).toFixed(
+                        2
+                      )} times</span> cover to cover. <i>Somebody</i> needs Christ. 
                     </div>
                   </div>
 
@@ -259,14 +273,15 @@ def analyze_zip(data_bytes):
                     <div class="metric-label">Energy used <span class="metric-value">${Math.round(
                       res.total_energy_kWh
                     )} kWh</span></div>
-                    <div class="metric-description">
+                    <div class="metric-footnote">
                       kWh, or kilowatt hours, is an estimate of energy used. We use a rate of 0.000010 kWh per character, based on reported LLM energy averages.
-                      <br><br>
+                    </div>
+                    <div class="metric-description">
                       Your usage is equivalent to driving <span class="highlight">${Math.round(
                         res.tesla_miles
                       )} miles</span> in a Tesla or running a microwave for <span class="highlight">${Math.round(
                 res.microwave_hours * 60
-              )} minutes</span>.
+              )} minutes</span>. Maybe... idk, plant a tree to offset it?
                     </div>
                   </div>
                   <!-- Longest message -->
@@ -398,7 +413,7 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       .container {
-        max-width: 400px;
+        max-width: 500px;
         margin: 0 auto;
         padding: 30px 25px;
         position: relative;
@@ -470,7 +485,7 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       .faq-content {
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 400;
         line-height: 1.4;
         margin-bottom: 20px;
@@ -489,27 +504,28 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       .upload-button {
-        background-color: #000;
+        background-color: #ffffff;
         border: 2px solid #000;
-        color: #ffffff;
+        color: #000000;
         padding: 12px 20px;
         font-size: 14px;
         font-weight: 700;
         text-decoration: none;
         text-transform: uppercase;
         cursor: pointer;
-        box-shadow: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         margin: 10px 0;
         display: inline-block;
         position: relative;
         overflow: hidden;
         letter-spacing: 1px;
+        transition: all 0.2s ease;
       }
 
       .upload-button:hover {
-        transform: none;
-        box-shadow: none;
-        background-color: #333;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        background-color: #f8f8f8;
       }
 
       .upload-button.disabled {
@@ -589,7 +605,7 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       .metric-label {
-        font-size: 12px;
+        font-size: 14px;
         color: #000;
         font-weight: 700;
         margin-bottom: 5px;
@@ -601,7 +617,7 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       .metric-value {
-        font-size: 16px;
+        font-size: 18px;
         color: #000;
         font-weight: 700;
         line-height: 1;
@@ -611,13 +627,25 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
       }
 
       .metric-description {
-        font-size: 10px;
+        font-size: 12px;
         color: #666;
         font-weight: 400;
         line-height: 1.3;
         text-align: left;
         clear: both;
         margin-top: 5px;
+      }
+
+      .metric-footnote {
+        font-size: 8px;
+        color: #999;
+        font-weight: 400;
+        line-height: 1.2;
+        text-align: left;
+        clear: both;
+        margin-top: 3px;
+        margin-bottom: 8px;
+        font-style: italic;
       }
 
       .highlight {
@@ -703,11 +731,11 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
         font-size: 12px;
         color: #000;
         font-weight: 700;
-        margin: 20px 0;
+        margin: 20px;
         text-transform: uppercase;
         letter-spacing: 1px;
         padding: 10px;
-        border: 1px dashed #000;
+        /* border: 1px dashed #000; */
       }
 
       .error-message {
@@ -789,10 +817,11 @@ Try it yourself: https://joshstrupp-dot-com.github.io/chatWrapped/`;
           It's simple really. You talk to ChatGPT. Maybe a lot, maybe a little.
           It's hard to gauge, isn't it?
           <br /><br />
-          With your conversation export, we can gauge it. Or, we can get close.
-          Here, you can estimate time spend writing to your new robot pal, how
-          much time you spend reading its response, and roughly how much energy
-          it all takes.
+          With Chat Wrapped, we can get close. Or we can try. Here, you can
+          estimate time spend writing to your new robot pal, how much time you
+          spend reading its response, and roughly how much energy it all takes.
+          <br /><br />
+          It's like Spotify Wrapped, but less interesting and more depressing.
         </div>
       </div>
 
